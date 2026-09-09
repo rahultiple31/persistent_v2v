@@ -1,18 +1,34 @@
 locals {
-  webapp_root = trimsuffix(var.webapp_root_prefix, "/")
+  v2v_root        = trimsuffix(var.v2v_root_prefix, "/")
+  v2v_origin_path = local.v2v_root == "" ? null : "/${local.v2v_root}"
 }
 
-resource "aws_cloudfront_origin_access_control" "webapp" {
-  name                              = "${var.name_prefix}-webapp"
-  description                       = "Origin access control for ${var.app_name} webapp"
+moved {
+  from = aws_cloudfront_origin_access_control.webapp
+  to   = aws_cloudfront_origin_access_control.v2v
+}
+
+moved {
+  from = aws_cloudfront_cache_policy.webapp_disabled
+  to   = aws_cloudfront_cache_policy.v2v_disabled
+}
+
+moved {
+  from = aws_cloudfront_distribution.webapp
+  to   = aws_cloudfront_distribution.v2v
+}
+
+resource "aws_cloudfront_origin_access_control" "v2v" {
+  name                              = "${var.name_prefix}-v2v"
+  description                       = "Origin access control for ${var.app_name} V2V application"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
 
-resource "aws_cloudfront_cache_policy" "webapp_disabled" {
-  name        = "${var.name_prefix}-webapp-disabled"
-  comment     = "Disable cache for ${var.app_name} webapp"
+resource "aws_cloudfront_cache_policy" "v2v_disabled" {
+  name        = "${var.name_prefix}-v2v-disabled"
+  comment     = "Disable cache for ${var.app_name} V2V application"
   default_ttl = 0
   max_ttl     = 1
   min_ttl     = 0
@@ -97,6 +113,40 @@ resource "aws_cloudfront_cache_policy" "translate_api" {
   }
 }
 
+resource "aws_cloudfront_response_headers_policy" "security_headers" {
+  name    = "${var.name_prefix}-security-headers"
+  comment = "Security headers for ${var.app_name} V2V application responses"
+
+  security_headers_config {
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+      preload                    = true
+    }
+
+    xss_protection {
+      mode_block = true
+      override   = true
+      protection = true
+    }
+  }
+}
+
 resource "aws_cloudfront_origin_request_policy" "polly_api" {
   count = var.polly_proxy_enabled ? 1 : 0
 
@@ -163,7 +213,7 @@ resource "aws_cloudfront_function" "translate_url_rewrite" {
   code    = file("${path.module}/functions/translate-url-rewrite.js")
 }
 
-resource "aws_cloudfront_distribution" "webapp" {
+resource "aws_cloudfront_distribution" "v2v" {
   comment         = "CloudFront for ${var.app_name}"
   enabled         = true
   is_ipv6_enabled = false
@@ -172,16 +222,16 @@ resource "aws_cloudfront_distribution" "webapp" {
   default_root_object = "index.html"
 
   logging_config {
-    bucket          = var.webapp_log_bucket_domain_name
+    bucket          = var.v2v_log_bucket_domain_name
     include_cookies = false
     prefix          = "cloudfront-logs/"
   }
 
   origin {
-    domain_name              = var.webapp_bucket_regional_domain_name
-    origin_id                = "webapp-s3"
-    origin_access_control_id = aws_cloudfront_origin_access_control.webapp.id
-    origin_path              = "/${local.webapp_root}"
+    domain_name              = var.v2v_bucket_regional_domain_name
+    origin_id                = "v2v-s3"
+    origin_access_control_id = aws_cloudfront_origin_access_control.v2v.id
+    origin_path              = local.v2v_origin_path
   }
 
   dynamic "origin" {
@@ -217,26 +267,28 @@ resource "aws_cloudfront_distribution" "webapp" {
   }
 
   default_cache_behavior {
-    target_origin_id       = "webapp-s3"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    cache_policy_id        = aws_cloudfront_cache_policy.webapp_disabled.id
-    compress               = true
+    target_origin_id           = "v2v-s3"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id            = aws_cloudfront_cache_policy.v2v_disabled.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
+    compress                   = true
   }
 
   dynamic "ordered_cache_behavior" {
     for_each = var.polly_proxy_enabled ? [1] : []
 
     content {
-      path_pattern             = "/amazon-polly-proxy/*"
-      target_origin_id         = "polly-api"
-      viewer_protocol_policy   = "https-only"
-      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-      cached_methods           = ["GET", "HEAD"]
-      cache_policy_id          = aws_cloudfront_cache_policy.polly_api[0].id
-      origin_request_policy_id = aws_cloudfront_origin_request_policy.polly_api[0].id
-      compress                 = true
+      path_pattern               = "/amazon-polly-proxy/*"
+      target_origin_id           = "polly-api"
+      viewer_protocol_policy     = "https-only"
+      allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods             = ["GET", "HEAD"]
+      cache_policy_id            = aws_cloudfront_cache_policy.polly_api[0].id
+      origin_request_policy_id   = aws_cloudfront_origin_request_policy.polly_api[0].id
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
+      compress                   = true
 
       function_association {
         event_type   = "viewer-request"
@@ -249,14 +301,15 @@ resource "aws_cloudfront_distribution" "webapp" {
     for_each = var.translate_proxy_enabled ? [1] : []
 
     content {
-      path_pattern             = "/amazon-translate-proxy/*"
-      target_origin_id         = "translate-api"
-      viewer_protocol_policy   = "https-only"
-      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-      cached_methods           = ["GET", "HEAD"]
-      cache_policy_id          = aws_cloudfront_cache_policy.translate_api[0].id
-      origin_request_policy_id = aws_cloudfront_origin_request_policy.translate_api[0].id
-      compress                 = true
+      path_pattern               = "/amazon-translate-proxy/*"
+      target_origin_id           = "translate-api"
+      viewer_protocol_policy     = "https-only"
+      allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods             = ["GET", "HEAD"]
+      cache_policy_id            = aws_cloudfront_cache_policy.translate_api[0].id
+      origin_request_policy_id   = aws_cloudfront_origin_request_policy.translate_api[0].id
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
+      compress                   = true
 
       function_association {
         event_type   = "viewer-request"
@@ -267,6 +320,13 @@ resource "aws_cloudfront_distribution" "webapp" {
 
   custom_error_response {
     error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 60
+  }
+
+  custom_error_response {
+    error_code            = 404
     response_code         = 200
     response_page_path    = "/index.html"
     error_caching_min_ttl = 60

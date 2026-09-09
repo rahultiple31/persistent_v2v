@@ -1,6 +1,11 @@
 variable "name_prefix" {
   description = "Name prefix for IAM roles and policies."
   type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,48}$", var.name_prefix))
+    error_message = "name_prefix must be 1-48 IAM name-safe characters: letters, numbers, +=,.@_ or hyphen."
+  }
 }
 
 variable "identity_pool_id" {

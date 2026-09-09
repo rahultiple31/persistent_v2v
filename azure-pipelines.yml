@@ -14,11 +14,21 @@ parameters:
   - name: targetRegion
     displayName: Target region
     type: string
-    default: us-east-1
+    default: all
     values:
+      - all
       - us-east-1
       - eu-central-1
       - ap-southeast-1
+
+  - name: targetModule
+    displayName: Target module
+    type: string
+    default: connect
+    values:
+      - connect
+      - lambda
+      - v2v
 
   - name: terraformAction
     displayName: Terraform action
@@ -33,41 +43,73 @@ variables:
   nodeVersion: '20.x'
   workingDirectory: 'environments/${{ parameters.targetEnvironment }}'
   backendBucket: 'bts-cloud-terraform-tfstate'
-  backendKey: 'terraform-state/${{ parameters.targetEnvironment }}/${{ parameters.targetRegion }}/connect-v2v-translation/terraform.tfstate'
+  backendKey: 'terraform-state/${{ parameters.targetEnvironment }}/${{ parameters.targetRegion }}/${{ parameters.targetModule }}/terraform.tfstate'
   backendRegion: 'us-east-1'
-  planArtifactName: 'terraform-plan-${{ parameters.targetEnvironment }}-${{ parameters.targetRegion }}-connect-v2v-translation'
+  planArtifactName: 'terraform-plan-${{ parameters.targetEnvironment }}-${{ parameters.targetRegion }}-${{ parameters.targetModule }}'
 
 stages:
   - stage: plan
-    displayName: Plan ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }} V2V translation
+    displayName: Plan ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }} ${{ parameters.targetModule }}
     condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
     jobs:
       - job: terraform_plan
-        displayName: Terraform Plan ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }}
+        displayName: Terraform Plan ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }} ${{ parameters.targetModule }}
         pool:
           vmImage: ubuntu-latest
         steps:
           - checkout: self
-
-          - task: NodeTool@0
-            displayName: Install Node
-            inputs:
-              versionSpec: $(nodeVersion)
 
           - task: TerraformInstaller@1
             displayName: Install Terraform
             inputs:
               terraformVersion: $(terraformVersion)
 
-          - script: |
-              set -euo pipefail
-              npm ci
-              npm run build
-            displayName: Build webapp
-            workingDirectory: webapp
+          - task: NodeTool@0
+            displayName: Install Node.js
+            condition: eq('${{ parameters.targetModule }}', 'v2v')
+            inputs:
+              versionSpec: $(nodeVersion)
 
           - script: |
               set -euo pipefail
+
+              case '${{ parameters.targetRegion }}:${{ parameters.targetModule }}' in
+                all:connect)
+                  TF_TARGET_ARGS='-target=module.connect_us_east_1[0] -target=module.connect_eu_central_1[0] -target=module.connect_ap_southeast_1[0]'
+                  ;;
+                all:lambda)
+                  TF_TARGET_ARGS='-target=module.lambda_us_east_1[0] -target=module.lambda_eu_central_1[0] -target=module.lambda_ap_southeast_1[0]'
+                  ;;
+                all:v2v)
+                  TF_TARGET_ARGS='-target=module.cognito_v2v[0] -target=module.iam_v2v[0] -target=module.s3_v2v[0] -target=module.cloudfront_v2v[0] -target=module.ssm_v2v[0]'
+                  ;;
+                us-east-1:connect)
+                  TF_TARGET_ARGS='-target=module.connect_us_east_1[0]'
+                  ;;
+                us-east-1:lambda)
+                  TF_TARGET_ARGS='-target=module.lambda_us_east_1[0]'
+                  ;;
+                eu-central-1:connect)
+                  TF_TARGET_ARGS='-target=module.connect_eu_central_1[0]'
+                  ;;
+                eu-central-1:lambda)
+                  TF_TARGET_ARGS='-target=module.lambda_eu_central_1[0]'
+                  ;;
+                ap-southeast-1:connect)
+                  TF_TARGET_ARGS='-target=module.connect_ap_southeast_1[0]'
+                  ;;
+                ap-southeast-1:lambda)
+                  TF_TARGET_ARGS='-target=module.lambda_ap_southeast_1[0]'
+                  ;;
+                *:v2v)
+                  echo "The v2v module is environment-scoped. Set targetRegion to all when targetModule is v2v."
+                  exit 1
+                  ;;
+                *)
+                  echo "Unsupported target region and module combination: ${{ parameters.targetRegion }} ${{ parameters.targetModule }}"
+                  exit 1
+                  ;;
+              esac
 
               case '${{ parameters.targetEnvironment }}' in
                 dev)
@@ -96,6 +138,11 @@ stages:
               export AWS_WEB_IDENTITY_TOKEN_FILE
               export AWS_ROLE_SESSION_NAME="azure-pipelines-${{ parameters.targetEnvironment }}-$(Build.BuildId)"
 
+              if [ '${{ parameters.targetModule }}' = 'v2v' ]; then
+                npm ci --prefix "$(Build.SourcesDirectory)/webapp" --no-audit --no-fund
+                npm run build --prefix "$(Build.SourcesDirectory)/webapp"
+              fi
+
               terraform init -reconfigure \
                 -backend-config="bucket=$(backendBucket)" \
                 -backend-config="key=$(backendKey)" \
@@ -104,13 +151,19 @@ stages:
 
               terraform fmt -recursive ../..
               terraform validate
-              terraform plan -var='aws_region=${{ parameters.targetRegion }}' -out=tfplan
+              python3 -m pip install --upgrade pip
+              python3 -m pip install checkov
+              checkov -d ../.. --framework terraform --soft-fail
+              terraform plan -var='enabled_modules=["${{ parameters.targetModule }}"]' ${TF_TARGET_ARGS} -out=tfplan
 
               PLAN_ARTIFACT_DIR="$(Build.ArtifactStagingDirectory)/terraform-plan"
               mkdir -p "$PLAN_ARTIFACT_DIR"
               cp tfplan "$PLAN_ARTIFACT_DIR/"
-              mkdir -p "$PLAN_ARTIFACT_DIR/webapp-dist"
-              cp -R ../../webapp/dist/. "$PLAN_ARTIFACT_DIR/webapp-dist/"
+              find . -maxdepth 1 -name '*.zip' -exec cp {} "$PLAN_ARTIFACT_DIR/" \;
+              if [ '${{ parameters.targetModule }}' = 'v2v' ]; then
+                mkdir -p "$PLAN_ARTIFACT_DIR/v2v-dist"
+                cp -R "$(Build.SourcesDirectory)/webapp/dist/." "$PLAN_ARTIFACT_DIR/v2v-dist/"
+              fi
             displayName: Terraform Init, Validate, and Plan
             workingDirectory: $(workingDirectory)
             env:
@@ -122,12 +175,12 @@ stages:
             artifact: $(planArtifactName)
 
   - stage: apply
-    displayName: Apply ${{ parameters.terraformAction }} ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }} V2V translation
+    displayName: Apply ${{ parameters.terraformAction }} ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }} ${{ parameters.targetModule }}
     dependsOn: plan
     condition: and(succeeded(), eq('${{ parameters.terraformAction }}', 'apply'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
       - deployment: terraform_apply
-        displayName: Terraform Apply ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }}
+        displayName: Terraform Apply ${{ parameters.terraformAction }} ${{ parameters.targetEnvironment }} ${{ parameters.targetRegion }} ${{ parameters.targetModule }}
         environment: ${{ parameters.targetEnvironment }}
         pool:
           vmImage: ubuntu-latest
@@ -176,14 +229,20 @@ stages:
                     export AWS_WEB_IDENTITY_TOKEN_FILE
                     export AWS_ROLE_SESSION_NAME="azure-pipelines-${{ parameters.targetEnvironment }}-$(Build.BuildId)"
 
+                    if [ '${{ parameters.targetModule }}' = 'v2v' ]; then
+                      V2V_DIST_DIR="$(Build.SourcesDirectory)/webapp/dist"
+                      rm -rf "$V2V_DIST_DIR"
+                      mkdir -p "$V2V_DIST_DIR"
+                      cp -R "$(Pipeline.Workspace)/$(planArtifactName)/v2v-dist/." "$V2V_DIST_DIR/"
+                    fi
+
                     terraform init -reconfigure \
                       -backend-config="bucket=$(backendBucket)" \
                       -backend-config="key=$(backendKey)" \
                       -backend-config="region=$(backendRegion)" \
                       -backend-config="encrypt=true"
 
-                    mkdir -p ../../webapp/dist
-                    cp -R "$(Pipeline.Workspace)/$(planArtifactName)/webapp-dist/." ../../webapp/dist/
+                    find "$(Pipeline.Workspace)/$(planArtifactName)" -maxdepth 1 -name '*.zip' -exec cp {} . \;
                     terraform apply -auto-approve "$(Pipeline.Workspace)/$(planArtifactName)/tfplan"
                   displayName: Terraform Apply
                   workingDirectory: $(workingDirectory)

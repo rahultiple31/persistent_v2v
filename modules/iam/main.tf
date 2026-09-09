@@ -56,46 +56,46 @@ resource "aws_iam_role" "authenticated" {
   tags               = var.common_tags
 }
 
-resource "aws_iam_role_policy" "unauthenticated" {
-  name = "${var.name_prefix}-unauthenticated"
-  role = aws_iam_role.unauthenticated.id
+data "aws_iam_policy_document" "unauthenticated_permissions" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "mobileanalytics:PutEvents",
+      "cognito-sync:*"
+    ]
+    resources = ["*"]
+  }
+}
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "mobileanalytics:PutEvents",
-        "cognito-sync:*"
-      ]
-      Resource = "*"
-    }]
-  })
+data "aws_iam_policy_document" "authenticated_permissions" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "mobileanalytics:PutEvents",
+      "cognito-sync:*",
+      "cognito-identity:*",
+      "polly:SynthesizeSpeech",
+      "polly:DescribeVoices",
+      "transcribe:StartStreamTranscription",
+      "transcribe:StartStreamTranscriptionWebSocket",
+      "translate:ListLanguages",
+      "translate:TranslateText",
+      "cognito-identity:GetCredentialsForIdentity"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "unauthenticated" {
+  name   = "${var.name_prefix}-unauthenticated"
+  role   = aws_iam_role.unauthenticated.id
+  policy = data.aws_iam_policy_document.unauthenticated_permissions.json
 }
 
 resource "aws_iam_role_policy" "authenticated" {
-  name = "${var.name_prefix}-authenticated"
-  role = aws_iam_role.authenticated.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "mobileanalytics:PutEvents",
-        "cognito-sync:*",
-        "cognito-identity:*",
-        "polly:SynthesizeSpeech",
-        "polly:DescribeVoices",
-        "transcribe:StartStreamTranscription",
-        "transcribe:StartStreamTranscriptionWebSocket",
-        "translate:ListLanguages",
-        "translate:TranslateText",
-        "cognito-identity:GetCredentialsForIdentity"
-      ]
-      Resource = "*"
-    }]
-  })
+  name   = "${var.name_prefix}-authenticated"
+  role   = aws_iam_role.authenticated.id
+  policy = data.aws_iam_policy_document.authenticated_permissions.json
 }
 
 resource "aws_cognito_identity_pool_roles_attachment" "this" {

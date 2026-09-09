@@ -9,7 +9,7 @@ output "user_pool_id" {
 }
 
 output "user_pool_web_client_id" {
-  description = "Cognito User Pool app client ID for the webapp."
+  description = "Cognito User Pool app client ID for the V2V application."
   value       = aws_cognito_user_pool_client.web.id
 }
 

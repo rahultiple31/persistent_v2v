@@ -1,29 +1,29 @@
 export const COGNITO_CONFIG = {
-  region: getParamValue(window.WebappConfig.backendRegion),
-  cognitoDomain: getParamValue(window.WebappConfig.cognitoDomainURL),
-  identityPoolId: getParamValue(window.WebappConfig.identityPoolId),
-  userPoolId: getParamValue(window.WebappConfig.userPoolId),
-  clientId: getParamValue(window.WebappConfig.userPoolWebClientId),
+  region: getParamValue(window.V2VConfig.backendRegion),
+  cognitoDomain: getParamValue(window.V2VConfig.cognitoDomainURL),
+  identityPoolId: getParamValue(window.V2VConfig.identityPoolId),
+  userPoolId: getParamValue(window.V2VConfig.userPoolId),
+  clientId: getParamValue(window.V2VConfig.userPoolWebClientId),
 };
 
 export const CONNECT_CONFIG = {
-  connectInstanceURL: getParamValue(window.WebappConfig.connectInstanceURL),
-  connectInstanceRegion: getParamValue(window.WebappConfig.connectInstanceRegion),
+  connectInstanceURL: getParamValue(window.V2VConfig.connectInstanceURL),
+  connectInstanceRegion: getParamValue(window.V2VConfig.connectInstanceRegion),
 };
 
 export const TRANSCRIBE_CONFIG = {
-  transcribeRegion: getParamValue(window.WebappConfig.transcribeRegion),
+  transcribeRegion: getParamValue(window.V2VConfig.transcribeRegion),
 };
 
 export const TRANSLATE_CONFIG = {
-  translateRegion: getParamValue(window.WebappConfig.translateRegion),
-  translateProxyEnabled: getBoolParamValue(window.WebappConfig.translateProxyEnabled),
+  translateRegion: getParamValue(window.V2VConfig.translateRegion),
+  translateProxyEnabled: getBoolParamValue(window.V2VConfig.translateProxyEnabled),
   translateProxyHostname: window.location.hostname, // using Amazon Cloudfront as a proxy
 };
 
 export const POLLY_CONFIG = {
-  pollyRegion: getParamValue(window.WebappConfig.pollyRegion),
-  pollyProxyEnabled: getBoolParamValue(window.WebappConfig.pollyProxyEnabled),
+  pollyRegion: getParamValue(window.V2VConfig.pollyRegion),
+  pollyProxyEnabled: getBoolParamValue(window.V2VConfig.pollyProxyEnabled),
   pollyProxyHostname: window.location.hostname, // using Amazon Cloudfront as a proxy
 };
 

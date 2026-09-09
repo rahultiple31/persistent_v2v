@@ -1,6 +1,13 @@
-environment             = "uat"
-project_name            = "abbvie"
-aws_region              = "us-east-1"
+environment          = "uat"
+project_name         = "abbvie"
+aws_region           = "us-east-1"
+contact_center_alias = "company-connect-uat"
+
+common_tags = {
+  CostCenter = "contact-center"
+  Owner      = "platform-engineering"
+}
+
 cognito_domain_prefix   = "abbvie-uat-connect-v2v"
 cognito_callback_urls   = ["https://localhost:5173"]
 cognito_logout_urls     = ["https://localhost:5173"]
@@ -11,9 +18,4 @@ translate_region        = "us-east-1"
 translate_proxy_enabled = true
 polly_region            = "us-east-1"
 polly_proxy_enabled     = true
-deploy_webapp_assets    = true
-
-common_tags = {
-  CostCenter = "contact-center"
-  Owner      = "platform-engineering"
-}
+deploy_v2v_assets       = true

@@ -1,64 +1,60 @@
-# Amazon Connect V2V Translation Terraform
+# Azure DevOps CI/CD to AWS Amazon Connect Environments
 
-This repository contains a Terraform implementation of the
-`connect-v2v-translation-with-cx-options` sample. It keeps the existing
-environment layout and replaces the previous Terraform module with
-service-specific modules:
-
-- `modules/cognito`
-- `modules/iam`
-- `modules/s3`
-- `modules/cloudfront`
-- `modules/ssm`
-
-The copied `webapp` folder is the non-CDK Vite application that Terraform can
-build and upload to S3. No CDK stack code, CDK configuration, or CDK-specific
-files are required.
+This repository contains Terraform for Amazon Connect in multi-region AWS Dev
+and UAT environments. Azure Repos and Azure Pipelines run Terraform against AWS
+across three regions.
 
 ## Environments
 
 - Dev: `environments/dev`
 - UAT: `environments/uat`
 
-Each environment deploys the V2V application in the selected AWS region. The
-service modules create:
+Each environment has its own Terraform root, variable values, backend state key,
+and Azure DevOps approval environment. Both environments use the shared Connect
+module in `modules/connect`.
 
-- Cognito User Pool, hosted UI domain, and web app client
-- Cognito Identity Pool
-- Authenticated and unauthenticated Identity Pool IAM roles
-- SSM parameters under `/AmazonConnectV2V/`
-- S3 webapp bucket and CloudFront log bucket
-- CloudFront distribution with S3 Origin Access Control
-- Optional CloudFront proxy behaviors for Amazon Polly and Amazon Translate
-- `frontend-config.js` in the webapp bucket
-- Optional upload of built Vite webapp assets from `webapp/dist`
+The pipeline also selects one infrastructure module per run. Each selected
+module uses its own Terraform state file in S3 using the environment, region,
+and module order.
 
-The Amazon Connect instance itself is treated as an existing prerequisite. Set
-`connect_instance_url` and `connect_instance_region` in the environment
-`terraform.tfvars` file.
+## Regions
 
-## Configuration
+- US: `us-east-1`
+- Europe: `eu-central-1`
+- APAC: `ap-southeast-1`
 
-At minimum, review these values in each environment:
+## Architecture
 
-```hcl
-cognito_domain_prefix   = "globally-unique-domain-prefix"
-connect_instance_url    = "https://your-connect-instance.my.connect.aws"
-connect_instance_region = "us-east-1"
-```
+Each environment can deploy Amazon Connect, Lambda smoke-test, and V2V
+application infrastructure modules. The shared Connect module creates:
 
-The source project uses a two-step setup for Cognito callback and logout URLs:
-deploy once, add the CloudFront `webapp_url` output to the URL lists, then
-apply again. Local development URLs remain configurable through:
+- Amazon Connect instance
+- Primary queue
+- Agent security profile
+- Primary routing profile
+- Placeholder inbound contact flow
 
-```hcl
-cognito_callback_urls = ["https://localhost:5173"]
-cognito_logout_urls   = ["https://localhost:5173"]
-```
+No VPC, subnet, NAT, route table, Lex, DynamoDB, CloudTrail, API Gateway,
+Secrets Manager, or Contact Lens modules are part of the Connect target.
+
+The disposable Lambda test module can be selected separately for pipeline smoke
+testing. It creates:
+
+- One Python Lambda function for simple pipeline testing
+- One IAM execution role for the Lambda function
+- AWS managed Lambda basic execution policy attachment
+
+The V2V target deploys the frontend application support stack. It creates:
+
+- Amazon Cognito user pool, app client, domain, and identity pool
+- IAM roles and policies for Cognito identities
+- S3 buckets and objects for V2V application hosting and CloudFront logs
+- CloudFront distribution, cache policies, security headers, and URL rewrite functions
+- SSM Parameter Store configuration values
 
 ## Backend
 
-Terraform uses the existing S3 backend shape:
+Terraform uses an S3 backend with native S3 state locking:
 
 ```hcl
 terraform {
@@ -68,41 +64,142 @@ terraform {
 }
 ```
 
-Example init command:
+Create the backend bucket before running the pipeline. The Azure pipeline uses:
+
+```text
+bucket: bts-cloud-terraform-tfstate
+dev key: terraform-state/dev/us-east-1/connect/terraform.tfstate
+uat key: terraform-state/uat/us-east-1/connect/terraform.tfstate
+region: us-east-1
+encrypt: true
+use_lockfile: true
+```
+
+The backend key pattern is:
+
+```text
+terraform-state/<environment>/<region>/<module>/terraform.tfstate
+```
+
+The same environment/region/module order is used for pipeline plan artifacts and
+display names.
+
+Examples:
+
+```text
+terraform-state/dev/us-east-1/connect/terraform.tfstate
+terraform-state/uat/eu-central-1/connect/terraform.tfstate
+terraform-state/dev/all/lambda/terraform.tfstate
+terraform-state/dev/all/v2v/terraform.tfstate
+```
+
+## Local Terraform
+
+From either environment root:
 
 ```bash
 cd environments/dev
+# or
+cd environments/uat
 
 terraform init -reconfigure \
-  -backend-config="bucket=bts-cloud-terraform-tfstate" \
-  -backend-config="key=terraform-state/dev/us-east-1/connect-v2v-translation/terraform.tfstate" \
+  -backend-config="bucket=bts-cloud-terraform-state" \
+  -backend-config="key=terraform-state/dev/us-east-1/connect/terraform.tfstate" \
   -backend-config="region=us-east-1" \
   -backend-config="encrypt=true"
-```
 
-## Local Build And Validate
-
-Build the webapp before planning when `deploy_webapp_assets = true`:
-
-```bash
-cd webapp
-npm ci
-npm run build
-```
-
-Then run Terraform:
-
-```bash
-cd ../environments/dev
 terraform fmt -recursive ../..
 terraform validate
 terraform plan
 ```
 
-The Azure pipeline performs the same webapp build before Terraform plan.
+Use the matching backend key for the selected environment. For UAT, use:
 
-## Post-Deploy
+```text
+terraform-state/uat/us-east-1/connect/terraform.tfstate
+```
 
-After deployment, add the `webapp_url` output as an approved origin on the
-existing Amazon Connect instance. Then create Cognito users in the generated
-User Pool for people who should access the demo webapp.
+To target one region:
+
+```bash
+terraform plan -target='module.connect_us_east_1[0]'
+terraform plan -target='module.connect_eu_central_1[0]'
+terraform plan -target='module.connect_ap_southeast_1[0]'
+```
+
+To activate only the Connect module in this state:
+
+```bash
+terraform plan -var='enabled_modules=["connect"]'
+```
+
+To activate only the Lambda test module in this state:
+
+```bash
+terraform plan -var='enabled_modules=["lambda"]'
+```
+
+To activate only the V2V application stack in this state:
+
+```bash
+terraform plan -var='enabled_modules=["v2v"]'
+```
+
+## Azure Pipeline Flow
+
+The pipeline in `azure-pipelines.yml` supports these parameters:
+
+- `targetEnvironment`: `dev` or `uat`
+- `targetRegion`: `all`, `us-east-1`, `eu-central-1`, or `ap-southeast-1`
+- `targetModule`: `connect`, `lambda`, or `v2v`
+- `terraformAction`: `plan` or `apply`
+
+When more modules are added later, add the module name to:
+
+- `targetModule` values in `azure-pipelines.yml`
+- `enabled_modules` validation in each environment's `variables.tf`
+- module gating locals and module blocks in each environment root
+- the pipeline target mapping for region and module
+
+The flow is:
+
+```text
+Code Commit -> Terraform Init -> Plan -> Approval -> Apply
+```
+
+The apply stage is gated through the Azure DevOps environment selected by
+`targetEnvironment`. Configure the `dev` and `uat` Azure DevOps environments
+with the review and approval checks your team needs.
+
+Required Azure DevOps variables:
+
+- `AWS_DEV_OIDC_ROLE_ARN`: AWS IAM role ARN assumed for Dev
+- `AWS_UAT_OIDC_ROLE_ARN`: AWS IAM role ARN assumed for UAT
+
+The pipeline uses Azure Pipelines OIDC and Terraform's AWS web identity
+authentication. It does not require static AWS access keys.
+
+Optional Amazon Connect administrator variables for the plan stage:
+
+- `connectAdminUserEnabled`: set to `true` to create the administrator user
+- `connectAdminFirstName`: administrator first name
+- `connectAdminLastName`: administrator last name
+- `connectAdminUsername`: administrator username
+- `CONNECT_ADMIN_PASSWORD`: administrator password, store as a secret variable
+- `connectAdminEmail`: administrator email address
+
+Terraform only needs one password value. The `Password (verify)` field exists
+in the AWS Console form, but it is not a Terraform argument.
+
+The AWS IAM roles must trust the Azure DevOps OIDC issuer for this pipeline.
+The pipeline requests the OIDC token from `System.OidcRequestUri`, writes it to a
+temporary token file, and exports:
+
+```text
+AWS_ROLE_ARN
+AWS_WEB_IDENTITY_TOKEN_FILE
+AWS_ROLE_SESSION_NAME
+```
+
+Make sure the pipeline can access `System.AccessToken`, because it is used to
+request the OIDC token from Azure DevOps.

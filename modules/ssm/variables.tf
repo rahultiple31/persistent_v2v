@@ -1,6 +1,11 @@
 variable "ssm_hierarchy" {
   description = "SSM Parameter Store hierarchy used by the V2V solution."
   type        = string
+
+  validation {
+    condition     = startswith(var.ssm_hierarchy, "/") && length(regexall("//", var.ssm_hierarchy)) == 0
+    error_message = "ssm_hierarchy must start with / and must not contain double slashes."
+  }
 }
 
 variable "parameters" {

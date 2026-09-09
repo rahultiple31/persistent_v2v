@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "AWS region for the V2V solution."
+  description = "Default AWS region for backend and unaliased provider operations."
   type        = string
   default     = "us-east-1"
 }
@@ -16,6 +16,78 @@ variable "project_name" {
   default     = "abbvie"
 }
 
+variable "contact_center_alias" {
+  description = "Alias prefix for the Amazon Connect UAT instances."
+  type        = string
+  default     = "connect"
+}
+
+variable "connect_name_suffix" {
+  description = "Suffix used in the Amazon Connect instance alias."
+  type        = string
+  default     = "connect"
+}
+
+variable "enabled_modules" {
+  description = "Infrastructure modules enabled for this Terraform state. Supported values: connect, lambda, v2v."
+  type        = list(string)
+  default     = ["connect"]
+
+  validation {
+    condition     = length(setsubtract(toset([for module_name in var.enabled_modules : lower(module_name)]), toset(["connect", "lambda", "v2v"]))) == 0
+    error_message = "enabled_modules supports: connect, lambda, v2v."
+  }
+}
+
+variable "common_tags" {
+  description = "Additional tags applied to all resources."
+  type        = map(string)
+  default     = {}
+}
+
+variable "lambda_name_suffix" {
+  description = "Suffix used in the Lambda function name."
+  type        = string
+  default     = "lambda-test"
+}
+
+variable "connect_admin_user_enabled" {
+  description = "Whether to create an initial Amazon Connect administrator user."
+  type        = bool
+  default     = false
+}
+
+variable "connect_admin_first_name" {
+  description = "First name for the Amazon Connect administrator user."
+  type        = string
+  default     = null
+}
+
+variable "connect_admin_last_name" {
+  description = "Last name for the Amazon Connect administrator user."
+  type        = string
+  default     = null
+}
+
+variable "connect_admin_username" {
+  description = "Username for the Amazon Connect administrator user."
+  type        = string
+  default     = null
+}
+
+variable "connect_admin_password" {
+  description = "Password for the Amazon Connect administrator user."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "connect_admin_email" {
+  description = "Email address for the Amazon Connect administrator user."
+  type        = string
+  default     = null
+}
+
 variable "app_name" {
   description = "Application name used for AWS resource names."
   type        = string
@@ -23,7 +95,7 @@ variable "app_name" {
 }
 
 variable "frontend_client_name" {
-  description = "Cognito User Pool app client name for the webapp."
+  description = "Cognito User Pool app client name for the V2V application."
   type        = string
   default     = "AmazonConnectV2VFrontend"
 }
@@ -32,18 +104,33 @@ variable "ssm_hierarchy" {
   description = "SSM Parameter Store hierarchy used by the V2V solution."
   type        = string
   default     = "/AmazonConnectV2V/"
+
+  validation {
+    condition     = startswith(var.ssm_hierarchy, "/") && length(regexall("//", var.ssm_hierarchy)) == 0
+    error_message = "ssm_hierarchy must start with / and must not contain double slashes."
+  }
 }
 
-variable "webapp_root_prefix" {
-  description = "S3 object prefix that CloudFront serves as the web application root."
+variable "v2v_root_prefix" {
+  description = "S3 object prefix that CloudFront serves as the V2V application root."
   type        = string
-  default     = "WebAppRoot/"
+  default     = "V2VRoot/"
+
+  validation {
+    condition     = var.v2v_root_prefix == "" || (!startswith(var.v2v_root_prefix, "/") && length(regexall("//", var.v2v_root_prefix)) == 0)
+    error_message = "v2v_root_prefix must be empty or a relative S3 prefix without a leading slash or double slashes."
+  }
 }
 
-variable "webapp_staging_prefix" {
-  description = "S3 object prefix reserved for staging artifacts."
+variable "v2v_staging_prefix" {
+  description = "S3 object prefix reserved for V2V staging artifacts."
   type        = string
-  default     = "WebAppStaging/"
+  default     = "V2VStaging/"
+
+  validation {
+    condition     = var.v2v_staging_prefix == "" || (!startswith(var.v2v_staging_prefix, "/") && length(regexall("//", var.v2v_staging_prefix)) == 0)
+    error_message = "v2v_staging_prefix must be empty or a relative S3 prefix without a leading slash or double slashes."
+  }
 }
 
 variable "cognito_domain_prefix" {
@@ -103,20 +190,14 @@ variable "polly_proxy_enabled" {
   default     = true
 }
 
-variable "deploy_webapp_assets" {
-  description = "Whether Terraform uploads files from webapp_dist_path to the hosting bucket."
+variable "deploy_v2v_assets" {
+  description = "Whether Terraform uploads files from v2v_dist_path to the hosting bucket."
   type        = bool
   default     = false
 }
 
-variable "webapp_dist_path" {
-  description = "Path to the built Vite webapp dist directory."
+variable "v2v_dist_path" {
+  description = "Path to the built Vite V2V app dist directory."
   type        = string
   default     = null
-}
-
-variable "common_tags" {
-  description = "Additional tags applied to supported resources."
-  type        = map(string)
-  default     = {}
 }

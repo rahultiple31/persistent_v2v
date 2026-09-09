@@ -1,9 +1,13 @@
+locals {
+  normalized_ssm_hierarchy = trim(var.ssm_hierarchy, "/")
+  ssm_hierarchy            = local.normalized_ssm_hierarchy == "" ? "" : "/${local.normalized_ssm_hierarchy}"
+}
+
 resource "aws_ssm_parameter" "this" {
   for_each = var.parameters
 
-  name      = "${var.ssm_hierarchy}${each.key}"
+  name      = "${local.ssm_hierarchy}/${each.key}"
   type      = "String"
   value     = each.value
-  overwrite = true
   tags      = var.common_tags
 }
