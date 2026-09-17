@@ -154,6 +154,9 @@ The pipeline in `azure-pipelines.yml` supports these parameters:
 - `targetModule`: `connect`, `lambda`, or `v2v`
 - `terraformAction`: `plan` or `apply`
 
+The `v2v` module is deployed only in `us-east-1`; select `us-east-1` for
+`targetRegion` when `targetModule` is `v2v`.
+
 When more modules are added later, add the module name to:
 
 - `targetModule` values in `azure-pipelines.yml`

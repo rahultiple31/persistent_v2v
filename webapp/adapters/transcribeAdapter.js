@@ -70,8 +70,8 @@ export async function startCustomerStreamTranscription(
   if (!Number.isInteger(sampleRate)) throw new Error("sampleRate is required as integer");
   if (isStringUndefinedNullEmpty(languageCode)) throw new Error("languageCode is required");
   if (isStringUndefinedNullEmpty(partialResultStability)) throw new Error("partialResultStability is required");
-  if (isFunction(onFinalTranscribeEvent)) throw new Error("onFinalTranscribeEvent is required");
-  if (isFunction(onPartialTranscribeEvent)) throw new Error("onPartialTranscribeEvent is required");
+  if (!isFunction(onFinalTranscribeEvent)) throw new Error("onFinalTranscribeEvent is required");
+  if (!isFunction(onPartialTranscribeEvent)) throw new Error("onPartialTranscribeEvent is required");
 
   const enablePartialResultsStabilization = TRANSCRIBE_PARTIAL_RESULTS_STABILITY.includes(partialResultStability);
 
@@ -115,8 +115,8 @@ export async function startAgentStreamTranscription(
   if (!Number.isInteger(sampleRate)) throw new Error("sampleRate is required as integer");
   if (isStringUndefinedNullEmpty(languageCode)) throw new Error("languageCode is required");
   if (isStringUndefinedNullEmpty(partialResultStability)) throw new Error("partialResultStability is required");
-  if (isFunction(onFinalTranscribeEvent)) throw new Error("onFinalTranscribeEvent is required");
-  if (isFunction(onPartialTranscribeEvent)) throw new Error("onPartialTranscribeEvent is required");
+  if (!isFunction(onFinalTranscribeEvent)) throw new Error("onFinalTranscribeEvent is required");
+  if (!isFunction(onPartialTranscribeEvent)) throw new Error("onPartialTranscribeEvent is required");
 
   const enablePartialResultsStabilization = TRANSCRIBE_PARTIAL_RESULTS_STABILITY.includes(partialResultStability);
 

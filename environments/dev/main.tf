@@ -131,7 +131,9 @@ module "lambda_ap_southeast_1" {
   lambda_name_suffix = var.lambda_name_suffix
 }
 
-data "aws_region" "current" {}
+data "aws_region" "current" {
+  provider = aws.us_east_1
+}
 
 moved {
   from = module.s3[0]
@@ -194,6 +196,10 @@ module "s3_v2v" {
   count  = local.deploy_v2v ? 1 : 0
   source = "../../modules/s3"
 
+  providers = {
+    aws = aws.us_east_1
+  }
+
   app_name             = var.app_name
   v2v_root_prefix      = var.v2v_root_prefix
   deploy_v2v_assets    = var.deploy_v2v_assets
@@ -205,6 +211,10 @@ module "s3_v2v" {
 module "cloudfront_v2v" {
   count  = local.deploy_v2v ? 1 : 0
   source = "../../modules/cloudfront"
+
+  providers = {
+    aws = aws.us_east_1
+  }
 
   name_prefix                     = local.name_prefix
   app_name                        = var.app_name
@@ -222,17 +232,25 @@ module "cognito_v2v" {
   count  = local.deploy_v2v ? 1 : 0
   source = "../../modules/cognito"
 
+  providers = {
+    aws = aws.us_east_1
+  }
+
   app_name              = var.app_name
   frontend_client_name  = var.frontend_client_name
   cognito_domain_prefix = var.cognito_domain_prefix
-  callback_urls         = var.cognito_callback_urls
-  logout_urls           = var.cognito_logout_urls
+  callback_urls         = distinct(concat(var.cognito_callback_urls, [module.cloudfront_v2v[0].v2v_url]))
+  logout_urls           = distinct(concat(var.cognito_logout_urls, [module.cloudfront_v2v[0].v2v_url]))
   common_tags           = local.common_tags
 }
 
 module "iam_v2v" {
   count  = local.deploy_v2v ? 1 : 0
   source = "../../modules/iam"
+
+  providers = {
+    aws = aws.us_east_1
+  }
 
   name_prefix      = local.name_prefix
   identity_pool_id = try(module.cognito_v2v[0].identity_pool_id, "")
@@ -242,6 +260,10 @@ module "iam_v2v" {
 module "ssm_v2v" {
   count  = local.deploy_v2v ? 1 : 0
   source = "../../modules/ssm"
+
+  providers = {
+    aws = aws.us_east_1
+  }
 
   ssm_hierarchy = var.ssm_hierarchy
   parameters    = local.ssm_parameters

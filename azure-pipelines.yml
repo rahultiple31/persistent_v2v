@@ -80,14 +80,14 @@ stages:
                 all:lambda)
                   TF_TARGET_ARGS='-target=module.lambda_us_east_1[0] -target=module.lambda_eu_central_1[0] -target=module.lambda_ap_southeast_1[0]'
                   ;;
-                all:v2v)
-                  TF_TARGET_ARGS='-target=module.cognito_v2v[0] -target=module.iam_v2v[0] -target=module.s3_v2v[0] -target=module.cloudfront_v2v[0] -target=module.ssm_v2v[0]'
-                  ;;
                 us-east-1:connect)
                   TF_TARGET_ARGS='-target=module.connect_us_east_1[0]'
                   ;;
                 us-east-1:lambda)
                   TF_TARGET_ARGS='-target=module.lambda_us_east_1[0]'
+                  ;;
+                us-east-1:v2v)
+                  TF_TARGET_ARGS='-target=module.cognito_v2v[0] -target=module.iam_v2v[0] -target=module.s3_v2v[0] -target=module.cloudfront_v2v[0] -target=module.ssm_v2v[0]'
                   ;;
                 eu-central-1:connect)
                   TF_TARGET_ARGS='-target=module.connect_eu_central_1[0]'
@@ -102,7 +102,7 @@ stages:
                   TF_TARGET_ARGS='-target=module.lambda_ap_southeast_1[0]'
                   ;;
                 *:v2v)
-                  echo "The v2v module is environment-scoped. Set targetRegion to all when targetModule is v2v."
+                  echo "The v2v module is deployed only in us-east-1. Set targetRegion to us-east-1 when targetModule is v2v."
                   exit 1
                   ;;
                 *)
