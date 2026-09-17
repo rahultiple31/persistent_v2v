@@ -188,7 +188,6 @@ Optional Amazon Connect administrator variables for the plan stage:
 - `connectAdminFirstName`: administrator first name
 - `connectAdminLastName`: administrator last name
 - `connectAdminUsername`: administrator username
-- `CONNECT_ADMIN_PASSWORD`: administrator password, store as a secret variable
 - `connectAdminEmail`: administrator email address
 
 Terraform only needs one password value. The `Password (verify)` field exists

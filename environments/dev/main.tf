@@ -28,12 +28,11 @@ module "connect_us_east_1" {
   region_code          = "us-east-1"
   common_tags          = local.common_tags
   contact_center_alias = var.contact_center_alias
-  connect_name_suffix  = var.connect_name_suffix
+  service_name_suffix  = var.connect_name_suffix
   admin_user_enabled   = var.connect_admin_user_enabled
   admin_user_first_name = var.connect_admin_first_name
   admin_user_last_name = var.connect_admin_last_name
   admin_user_username  = var.connect_admin_username
-  admin_user_password  = var.connect_admin_password
   admin_user_email     = var.connect_admin_email
 }
 
@@ -51,12 +50,11 @@ module "connect_eu_central_1" {
   region_code          = "eu-central-1"
   common_tags          = local.common_tags
   contact_center_alias = var.contact_center_alias
-  connect_name_suffix  = var.connect_name_suffix
+  service_name_suffix  = var.connect_name_suffix
   admin_user_enabled   = var.connect_admin_user_enabled
   admin_user_first_name = var.connect_admin_first_name
   admin_user_last_name = var.connect_admin_last_name
   admin_user_username  = var.connect_admin_username
-  admin_user_password  = var.connect_admin_password
   admin_user_email     = var.connect_admin_email
 }
 
@@ -74,12 +72,11 @@ module "connect_ap_southeast_1" {
   region_code          = "ap-southeast-1"
   common_tags          = local.common_tags
   contact_center_alias = var.contact_center_alias
-  connect_name_suffix  = var.connect_name_suffix
+  service_name_suffix  = var.connect_name_suffix
   admin_user_enabled   = var.connect_admin_user_enabled
   admin_user_first_name = var.connect_admin_first_name
   admin_user_last_name = var.connect_admin_last_name
   admin_user_username  = var.connect_admin_username
-  admin_user_password  = var.connect_admin_password
   admin_user_email     = var.connect_admin_email
 }
 

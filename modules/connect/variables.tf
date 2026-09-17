@@ -33,14 +33,14 @@ variable "contact_center_alias" {
   }
 }
 
-variable "connect_name_suffix" {
+variable "service_name_suffix" {
   description = "Suffix used in the Amazon Connect instance alias."
   type        = string
   default     = "connect"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9_-]*$", var.connect_name_suffix))
-    error_message = "connect_name_suffix must start with a letter or number and contain only letters, numbers, hyphens, or underscores."
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9_-]*$", var.service_name_suffix))
+    error_message = "service_name_suffix must start with a letter or number and contain only letters, numbers, hyphens, or underscores."
   }
 }
 
@@ -54,7 +54,6 @@ variable "admin_user_enabled" {
       var.admin_user_first_name != null,
       var.admin_user_last_name != null,
       var.admin_user_username != null,
-      var.admin_user_password != null,
       var.admin_user_email != null
     ])
     error_message = "When admin_user_enabled is true, all admin user fields must be provided."
@@ -65,29 +64,42 @@ variable "admin_user_first_name" {
   description = "First name for the Amazon Connect administrator user."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.admin_user_first_name == null ? true : length(var.admin_user_first_name) >= 1 && length(var.admin_user_first_name) <= 100
+    error_message = "admin_user_first_name must contain 1-100 characters."
+  }
 }
 
 variable "admin_user_last_name" {
   description = "Last name for the Amazon Connect administrator user."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.admin_user_last_name == null ? true : length(var.admin_user_last_name) >= 1 && length(var.admin_user_last_name) <= 100
+    error_message = "admin_user_last_name must contain 1-100 characters."
+  }
 }
 
 variable "admin_user_username" {
-  description = "Username for the Amazon Connect administrator user."
+  description = "Case-sensitive SAML username for the Amazon Connect administrator; it must match the IdP RoleSessionName."
   type        = string
   default     = null
-}
 
-variable "admin_user_password" {
-  description = "Password for the Amazon Connect administrator user. Set this from a secret variable."
-  type        = string
-  default     = null
-  sensitive   = true
+  validation {
+    condition     = var.admin_user_username == null || can(regex("^[A-Za-z0-9_.@-]{1,64}$", var.admin_user_username))
+    error_message = "admin_user_username must be 1-64 SAML-compatible characters: letters, numbers, underscore, hyphen, period, or @."
+  }
 }
 
 variable "admin_user_email" {
-  description = "Email address for the Amazon Connect administrator user."
+  description = "Secondary notification email for the SAML Amazon Connect administrator."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.admin_user_email == null || can(regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,63}$", var.admin_user_email))
+    error_message = "admin_user_email must be a valid email address."
+  }
 }

@@ -1,19 +1,31 @@
 locals {
-  name_prefix = lower(replace("${var.contact_center_alias}-${var.environment}-${var.region_code}-${var.connect_name_suffix}", "_", "-"))
+  service_name_prefix         = lower(replace("${var.contact_center_alias}-${var.environment}-${var.region_code}", "_", "-"))
+  instance_name               = lower(replace("${local.service_name_prefix}-${var.service_name_suffix}", "_", "-"))
+  primary_queue_name          = "${local.service_name_prefix}-primary-queue"
+  agent_security_profile_name = "${local.service_name_prefix}-agent-security-profile"
+  primary_routing_profile_name = "${local.service_name_prefix}-primary-routing-profile"
+  placeholder_flow_name       = "${local.service_name_prefix}-placeholder-inbound-flow"
   tags = merge(var.common_tags, {
-    Name       = local.name_prefix
+    Name       = local.instance_name
     RegionCode = var.region_code
     AWSRegion  = var.aws_region
-    Service    = var.connect_name_suffix
+    Service    = var.service_name_suffix
   })
 }
 
 resource "aws_connect_instance" "this" {
-  identity_management_type = "CONNECT_MANAGED"
+  identity_management_type = "SAML"
   inbound_calls_enabled    = true
   outbound_calls_enabled   = true
-  instance_alias           = substr(local.name_prefix, 0, 62)
+  instance_alias           = local.instance_name
   tags                     = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = length(local.instance_name) <= 45
+      error_message = "Amazon Connect instance aliases must not exceed 45 characters."
+    }
+  }
 }
 
 data "aws_connect_hours_of_operation" "basic" {
@@ -23,25 +35,25 @@ data "aws_connect_hours_of_operation" "basic" {
 
 resource "aws_connect_queue" "primary" {
   instance_id           = aws_connect_instance.this.id
-  name                  = "${upper(var.region_code)} Primary Queue"
+  name                  = local.primary_queue_name
   description           = "Primary queue for ${upper(var.region_code)} ${var.environment} contact center."
   hours_of_operation_id = data.aws_connect_hours_of_operation.basic.hours_of_operation_id
-  tags                  = local.tags
+  tags                  = merge(local.tags, { Name = local.primary_queue_name })
 }
 
 resource "aws_connect_security_profile" "agent" {
   instance_id = aws_connect_instance.this.id
-  name        = "${upper(var.region_code)} Agent Security Profile"
+  name        = local.agent_security_profile_name
   permissions = [
     "BasicAgentAccess",
     "OutboundCallAccess"
   ]
-  tags = local.tags
+  tags = merge(local.tags, { Name = local.agent_security_profile_name })
 }
 
 resource "aws_connect_routing_profile" "primary" {
   instance_id               = aws_connect_instance.this.id
-  name                      = "${upper(var.region_code)} Primary Routing Profile"
+  name                      = local.primary_routing_profile_name
   description               = "Primary routing profile for ${upper(var.region_code)} ${var.environment} agents."
   default_outbound_queue_id = aws_connect_queue.primary.queue_id
 
@@ -57,7 +69,7 @@ resource "aws_connect_routing_profile" "primary" {
     concurrency = 1
   }
 
-  tags = local.tags
+  tags = merge(local.tags, { Name = local.primary_routing_profile_name })
 }
 
 data "aws_connect_security_profile" "admin" {
@@ -70,7 +82,6 @@ resource "aws_connect_user" "admin" {
   count              = var.admin_user_enabled ? 1 : 0
   instance_id        = aws_connect_instance.this.id
   name               = var.admin_user_username
-  password           = var.admin_user_password
   routing_profile_id = aws_connect_routing_profile.primary.routing_profile_id
 
   security_profile_ids = [
@@ -78,9 +89,9 @@ resource "aws_connect_user" "admin" {
   ]
 
   identity_info {
-    email      = var.admin_user_email
-    first_name = var.admin_user_first_name
-    last_name  = var.admin_user_last_name
+    first_name      = var.admin_user_first_name
+    last_name       = var.admin_user_last_name
+    secondary_email = var.admin_user_email
   }
 
   phone_config {
@@ -93,7 +104,7 @@ resource "aws_connect_user" "admin" {
 
 resource "aws_connect_contact_flow" "placeholder" {
   instance_id = aws_connect_instance.this.id
-  name        = "${upper(var.region_code)} Placeholder Inbound Flow"
+  name        = local.placeholder_flow_name
   type        = "CONTACT_FLOW"
   description = "Placeholder flow for future IVR and routing logic import."
   content = jsonencode({
@@ -106,5 +117,5 @@ resource "aws_connect_contact_flow" "placeholder" {
       Transitions = {}
     }]
   })
-  tags = local.tags
+  tags = merge(local.tags, { Name = local.placeholder_flow_name })
 }

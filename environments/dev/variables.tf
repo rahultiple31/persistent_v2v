@@ -70,20 +70,13 @@ variable "connect_admin_last_name" {
 }
 
 variable "connect_admin_username" {
-  description = "Username for the Amazon Connect administrator user."
+  description = "Case-sensitive SAML username for the Amazon Connect administrator; it must match the IdP RoleSessionName."
   type        = string
   default     = null
-}
-
-variable "connect_admin_password" {
-  description = "Password for the Amazon Connect administrator user."
-  type        = string
-  default     = null
-  sensitive   = true
 }
 
 variable "connect_admin_email" {
-  description = "Email address for the Amazon Connect administrator user."
+  description = "Secondary notification email for the SAML Amazon Connect administrator."
   type        = string
   default     = null
 }
