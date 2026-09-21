@@ -34,6 +34,9 @@ module "connect_us_east_1" {
   admin_user_last_name = var.connect_admin_last_name
   admin_user_username  = var.connect_admin_username
   admin_user_email     = var.connect_admin_email
+  customer_queue_flow_content = file(
+    "${path.module}/metadata/contact-flows/abbvie-us-sd-transfer-to-agent-customer-queue-flow.json"
+  )
 }
 
 module "connect_eu_central_1" {

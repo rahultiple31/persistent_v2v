@@ -119,3 +119,17 @@ resource "aws_connect_contact_flow" "placeholder" {
   })
   tags = merge(local.tags, { Name = local.placeholder_flow_name })
 }
+
+resource "aws_connect_contact_flow" "transfer_to_agent_customer_queue" {
+  count = var.customer_queue_flow_content != null ? 1 : 0
+
+  instance_id = aws_connect_instance.this.id
+  name        = "ABBVIE-US-SD-Transfer-To-Agent-CustomerQueueFlow"
+  description = "Customer queue flow for transferring contacts to an available agent."
+  type        = "CUSTOMER_QUEUE"
+  content     = var.customer_queue_flow_content
+
+  tags = merge(local.tags, {
+    Name = "ABBVIE-US-SD-Transfer-To-Agent-CustomerQueueFlow"
+  })
+}

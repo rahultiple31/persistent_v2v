@@ -103,3 +103,9 @@ variable "admin_user_email" {
     error_message = "admin_user_email must be a valid email address."
   }
 }
+
+variable "customer_queue_flow_content" {
+  description = "JSON content for the transfer-to-agent customer queue flow."
+  type        = string
+  default     = null
+}
