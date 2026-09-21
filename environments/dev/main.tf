@@ -37,6 +37,12 @@ module "connect_us_east_1" {
   customer_queue_flow_content = file(
     "${path.module}/metadata/contact-flows/abbvie-us-sd-transfer-to-agent-customer-queue-flow.json"
   )
+  outbound_whisper_flow_content = file(
+    "${path.module}/metadata/contact-flows/abbvie-us-sd-outbound-whisper-flow.json"
+  )
+  agent_transfer_flow_content = file(
+    "${path.module}/metadata/contact-flows/abbvie-us-sd-agent-to-agent-transfer-flow.json"
+  )
 }
 
 module "connect_eu_central_1" {

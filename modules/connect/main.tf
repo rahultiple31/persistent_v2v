@@ -133,3 +133,35 @@ resource "aws_connect_contact_flow" "transfer_to_agent_customer_queue" {
     Name = "ABBVIE-US-SD-Transfer-To-Agent-CustomerQueueFlow"
   })
 }
+
+resource "aws_connect_contact_flow" "outbound_whisper" {
+  count = var.outbound_whisper_flow_content != null ? 1 : 0
+
+  instance_id = aws_connect_instance.this.id
+  name        = "ABBVIE-US-SD-OutboundWhisperFlow"
+  description = "Abbvie outbound whisper flow."
+  type        = "OUTBOUND_WHISPER"
+  content     = var.outbound_whisper_flow_content
+
+  tags = merge(local.tags, {
+    Name = "ABBVIE-US-SD-OutboundWhisperFlow"
+  })
+}
+
+resource "aws_connect_contact_flow" "agent_to_agent_transfer" {
+  count = var.agent_transfer_flow_content != null && var.customer_queue_flow_content != null ? 1 : 0
+
+  instance_id = aws_connect_instance.this.id
+  name        = "ABBVIE-US-SD-AgentToAgentTransferFlow"
+  description = "Agent-to-agent transfer flow."
+  type        = "AGENT_TRANSFER"
+  content = replace(
+    var.agent_transfer_flow_content,
+    "__CUSTOMER_QUEUE_FLOW_ARN__",
+    aws_connect_contact_flow.transfer_to_agent_customer_queue[0].arn
+  )
+
+  tags = merge(local.tags, {
+    Name = "ABBVIE-US-SD-AgentToAgentTransferFlow"
+  })
+}

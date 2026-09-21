@@ -109,3 +109,15 @@ variable "customer_queue_flow_content" {
   type        = string
   default     = null
 }
+
+variable "outbound_whisper_flow_content" {
+  description = "JSON content for the US outbound whisper flow."
+  type        = string
+  default     = null
+}
+
+variable "agent_transfer_flow_content" {
+  description = "JSON content for the US agent-to-agent transfer flow."
+  type        = string
+  default     = null
+}
