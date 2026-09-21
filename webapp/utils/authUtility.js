@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: MIT-0
 import { COGNITO_CONFIG } from "../config";
 import { LOGGER_PREFIX } from "../constants";
+import {
+  CognitoIdentityClient,
+  GetCredentialsForIdentityCommand,
+  GetIdCommand,
+} from "@aws-sdk/client-cognito-identity";
 
 export function setRedirectURI(redirectURI) {
   const currentUrl = redirectURI ?? window.location.href;
@@ -271,30 +276,27 @@ export function logout() {
 }
 
 async function getCognitoIdentityCredentials(idToken) {
-  // First, get the Cognito Identity ID
-  const identityParams = {
-    IdentityPoolId: COGNITO_CONFIG.identityPoolId,
-    Logins: {
-      [`cognito-idp.${COGNITO_CONFIG.region}.amazonaws.com/${COGNITO_CONFIG.userPoolId}`]: idToken,
-    },
+  const logins = {
+    [`cognito-idp.${COGNITO_CONFIG.region}.amazonaws.com/${COGNITO_CONFIG.userPoolId}`]: idToken,
   };
 
   try {
-    // Get Identity ID
-    const cognitoIdentity = new AWS.CognitoIdentity({
+    const cognitoIdentity = new CognitoIdentityClient({
       region: COGNITO_CONFIG.region,
     });
-    const { IdentityId } = await cognitoIdentity.getId(identityParams).promise();
-
-    // Get credentials
-    const cognitoCredentialsForIdentity = await cognitoIdentity
-      .getCredentialsForIdentity({
-        IdentityId,
-        Logins: {
-          [`cognito-idp.${COGNITO_CONFIG.region}.amazonaws.com/${COGNITO_CONFIG.userPoolId}`]: idToken,
-        },
+    const { IdentityId } = await cognitoIdentity.send(
+      new GetIdCommand({
+        IdentityPoolId: COGNITO_CONFIG.identityPoolId,
+        Logins: logins,
       })
-      .promise();
+    );
+
+    const cognitoCredentialsForIdentity = await cognitoIdentity.send(
+      new GetCredentialsForIdentityCommand({
+        IdentityId,
+        Logins: logins,
+      })
+    );
 
     const credentials = {
       accessKeyId: cognitoCredentialsForIdentity.Credentials.AccessKeyId,
